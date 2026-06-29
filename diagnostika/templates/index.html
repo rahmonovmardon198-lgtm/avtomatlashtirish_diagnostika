@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Avtomatlashtirish Diagnostika Tizimi</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#050a12; color:#e5e7eb; font-family:'Courier New',monospace; min-height:100vh; }
+.header { background:#060d18; border-bottom:1px solid #1e3a5f; padding:14px 28px; display:flex; align-items:center; justify-content:space-between; }
+.logo { display:flex; align-items:center; gap:14px; }
+.logo-icon { width:40px; height:40px; border-radius:8px; background:linear-gradient(135deg,#1d4ed8,#0891b2); display:flex; align-items:center; justify-content:center; font-size:20px; }
+.logo-title { font-size:15px; font-weight:700; letter-spacing:1px; color:#e2e8f0; }
+.logo-sub { font-size:10px; letter-spacing:2px; color:#4b5563; margin-top:2px; }
+.status-badge { display:flex; align-items:center; gap:8px; padding:6px 16px; border-radius:8px; border:1px solid; font-size:12px; letter-spacing:1px; font-weight:600; transition:all 0.3s; }
+.status-dot { width:9px; height:9px; border-radius:50%; }
+.tabs { background:#060d18; border-bottom:1px solid #1e3a5f; padding:0 28px; display:flex; }
+.tab { background:none; border:none; border-bottom:2px solid transparent; color:#4b5563; padding:12px 20px; cursor:pointer; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; font-family:'Courier New',monospace; transition:all 0.2s; }
+.tab.active { color:#93c5fd; border-bottom-color:#3b82f6; }
+.content { padding:24px 28px; max-width:1200px; margin:0 auto; }
+.page { display:none; }
+.page.active { display:block; }
+.stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
+.stat-card { border-radius:10px; padding:16px 18px; border:1px solid; }
+.stat-label { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#6b7280; }
+.stat-value { font-size:36px; font-weight:700; margin-top:4px; line-height:1; }
+.sensor-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.sensor-card { border-radius:12px; padding:16px 18px; border:1px solid; transition:all 0.3s; }
+.sensor-top { display:flex; justify-content:space-between; align-items:flex-start; }
+.sensor-name { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#6b7280; }
+.sensor-value { font-size:28px; font-weight:700; margin-top:4px; }
+.sensor-unit { font-size:12px; margin-left:3px; opacity:0.7; }
+.sensor-badge { border-radius:5px; padding:3px 8px; font-size:10px; letter-spacing:1px; border:1px solid; }
+.sensor-trend { font-size:10px; color:#4b5563; margin-top:6px; }
+canvas.mini { width:100%; height:36px; margin-top:8px; }
+.sensor-card.normal  { background:#0f2a1a; border-color:#1db954; }
+.sensor-card.warning { background:#2a1f0a; border-color:#f59e0b; box-shadow:0 0 8px #f59e0b33; }
+.sensor-card.critical{ background:#2a0a0a; border-color:#ef4444; box-shadow:0 0 14px #ef444444; animation:pulse-border 1.5s infinite; }
+@keyframes pulse-border { 0%,100%{box-shadow:0 0 8px #ef444444} 50%{box-shadow:0 0 20px #ef444488} }
+.panel { background:#0a0f1a; border:1px solid #1e3a5f; border-radius:12px; padding:20px; }
+.panel-title { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#6b7280; margin-bottom:14px; }
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+select, button.ctrl { background:#111827; border:1px solid #1e3a5f; color:#e5e7eb; font-family:'Courier New',monospace; font-size:12px; border-radius:6px; padding:8px 12px; width:100%; cursor:pointer; transition:all 0.2s; }
+select { margin-bottom:12px; }
+button.ctrl { letter-spacing:1px; font-weight:600; border-color:#3b82f6; color:#93c5fd; }
+button.ctrl.active { background:#2a0a0a; border-color:#ef4444; color:#f87171; }
+.diag-item { display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid #0f1f35; }
+.diag-item:last-child { border-bottom:none; }
+.diag-name { font-size:13px; color:#e5e7eb; }
+.diag-val { font-size:11px; color:#6b7280; margin-top:2px; }
+.diag-rec { font-size:11px; color:#4b5563; margin-top:4px; font-style:italic; }
+.badge { border-radius:4px; padding:3px 9px; font-size:10px; letter-spacing:0.5px; border:1px solid; white-space:nowrap; }
+.badge.warning { background:#f59e0b22; border-color:#f59e0b; color:#fbbf24; }
+.badge.critical { background:#ef444422; border-color:#ef4444; color:#f87171; }
+.badge.ok { background:#1db95422; border-color:#1db954; color:#4ade80; }
+.progress-row { margin-bottom:14px; }
+.progress-label { display:flex; justify-content:space-between; margin-bottom:5px; font-size:11px; }
+.progress-track { height:7px; background:#1e3a5f; border-radius:4px; overflow:hidden; }
+.progress-fill { height:100%; border-radius:4px; transition:width 0.6s ease; }
+/* Predictions */
+.pred-card { background:#1a1200; border:1px solid #f59e0b44; border-radius:10px; padding:14px 16px; margin-bottom:10px; }
+.pred-card.high { background:#1a0a00; border-color:#ef444466; }
+.pred-sensor { font-size:12px; color:#fbbf24; font-weight:600; }
+.pred-msg { font-size:11px; color:#6b7280; margin-top:4px; }
+.pred-bar-track { height:5px; background:#1e3a5f; border-radius:3px; margin-top:8px; overflow:hidden; }
+.pred-bar-fill { height:100%; border-radius:3px; }
+/* Chat */
+.chat-box { background:#0a0f1a; border:1px solid #1e3a5f; border-radius:12px; display:flex; flex-direction:column; height:420px; }
+.chat-header { padding:12px 16px; border-bottom:1px solid #1e3a5f; display:flex; align-items:center; gap:8px; }
+.chat-dot { width:8px; height:8px; border-radius:50%; background:#3b82f6; box-shadow:0 0 8px #3b82f6; }
+.chat-title { color:#93c5fd; font-size:12px; letter-spacing:1px; }
+.chat-messages { flex:1; overflow-y:auto; padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+.msg { max-width:80%; padding:8px 13px; border-radius:10px; font-size:12px; line-height:1.6; border:1px solid; }
+.msg.user { align-self:flex-end; background:#1d4ed8; border-color:#3b82f6; color:#bfdbfe; border-radius:10px 10px 2px 10px; }
+.msg.assistant { align-self:flex-start; background:#111827; border-color:#1e3a5f; color:#9ca3af; border-radius:10px 10px 10px 2px; }
+.chat-input { padding:12px 16px; border-top:1px solid #1e3a5f; display:flex; gap:8px; }
+.chat-input input { flex:1; background:#111827; border:1px solid #1e3a5f; border-radius:8px; padding:8px 12px; color:#e5e7eb; font-family:'Courier New',monospace; font-size:12px; outline:none; }
+.chat-input button { background:#1d4ed8; border:none; border-radius:8px; padding:8px 16px; color:#bfdbfe; cursor:pointer; font-size:16px; }
+.chat-input button:disabled { background:#1e3a5f; cursor:not-allowed; }
+.quick-btns { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+.quick-btn { background:#0a1a2a; border:1px solid #1e3a5f; border-radius:6px; padding:5px 12px; font-size:11px; color:#6b7280; cursor:pointer; font-family:'Courier New',monospace; transition:all 0.2s; }
+.quick-btn:hover { border-color:#3b82f6; color:#93c5fd; }
+.log-table { width:100%; border-collapse:collapse; }
+.log-table th { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#4b5563; text-align:left; padding:8px 12px; border-bottom:1px solid #1e3a5f; }
+.log-table td { padding:10px 12px; font-size:12px; border-bottom:1px solid #0f1f35; }
+.log-table tr:first-child td { background:#0f1f35; }
+.log-time { color:#4b5563; }
+.log-issue { color:#f87171; }
+.ok-msg { color:#1db954; text-align:center; padding:20px; font-size:13px; }
+.typing { display:flex; gap:4px; align-items:center; padding:4px 0; }
+.typing span { width:6px; height:6px; border-radius:50%; background:#3b82f6; animation:blink 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay:0.2s; }
+.typing span:nth-child(3) { animation-delay:0.4s; }
+@keyframes blink { 0%,100%{opacity:0.3} 50%{opacity:1} }
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:#0a0f1a; }
+::-webkit-scrollbar-thumb { background:#1e3a5f; border-radius:2px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">⚙</div>
+    <div>
+      <div class="logo-title">AVTOMATLASHTIRISH DIAGNOSTIKA TIZIMI</div>
+      <div class="logo-sub">SI YORDAMIDA NOSOZLIKLARNI ANIQLASH • PYTHON + FLASK</div>
+    </div>
+  </div>
+  <div id="statusBadge" class="status-badge" style="border-color:#1db954;background:#1db95411">
+    <div class="status-dot" id="statusDot" style="background:#1db954;box-shadow:0 0 8px #1db954"></div>
+    <span id="statusText" style="color:#1db954">NORMAL</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
+  <button class="tab" onclick="showTab('diagnostika',this)">🔍 Diagnostika</button>
+  <button class="tab" onclick="showTab('bashorat',this)">⚠️ Bashorat</button>
+  <button class="tab" onclick="showTab('chat',this)">🤖 SI Chat</button>
+  <button class="tab" onclick="showTab('jurnal',this)">📋 Jurnal</button>
+</div>
+
+<div class="content">
+
+  <!-- DASHBOARD -->
+  <div id="dashboard" class="page active">
+    <div class="stats-row">
+      <div class="stat-card" style="background:#3b82f611;border-color:#3b82f644">
+        <div class="stat-label">Jami sensorlar</div>
+        <div class="stat-value" style="color:#3b82f6">6</div>
+      </div>
+      <div class="stat-card" style="background:#1db95411;border-color:#1db95444">
+        <div class="stat-label">Normal</div>
+        <div class="stat-value" style="color:#1db954" id="countNormal">—</div>
+      </div>
+      <div class="stat-card" style="background:#f59e0b11;border-color:#f59e0b44">
+        <div class="stat-label">Ogohlantirish</div>
+        <div class="stat-value" style="color:#f59e0b" id="countWarning">—</div>
+      </div>
+      <div class="stat-card" style="background:#ef444411;border-color:#ef444444">
+        <div class="stat-label">Kritik</div>
+        <div class="stat-value" style="color:#ef4444" id="countCritical">—</div>
+      </div>
+    </div>
+    <div class="sensor-grid" id="sensorGrid"></div>
+  </div>
+
+  <!-- DIAGNOSTIKA -->
+  <div id="diagnostika" class="page">
+    <div class="two-col">
+      <div>
+        <div class="panel-title">Nosozlik simulyatsiyasi</div>
+        <div class="panel">
+          <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:6px;">Sensor tanlang:</label>
+          <select id="faultSelect">
+            {% for i, s in enumerate(sensors) %}
+            <option value="{{ i }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+          <button class="ctrl" id="faultBtn" onclick="toggleFault()">⚡ NOSOZLIK YOQISH</button>
+          <div id="faultAlert" style="display:none;margin-top:12px;background:#2a0a0a;border:1px solid #ef444444;border-radius:8px;padding:10px 14px;color:#f87171;font-size:12px;line-height:1.7;"></div>
+        </div>
+        <div class="panel-title" style="margin-top:20px;">SI Diagnostika natijasi</div>
+        <div class="panel"><div id="diagList"><div class="ok-msg">✓ Barcha tizimlar normal</div></div></div>
+      </div>
+      <div>
+        <div class="panel-title">Sensor holatlari</div>
+        <div class="panel"><div id="progressBars"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BASHORAT -->
+  <div id="bashorat" class="page">
+    <div class="two-col">
+      <div>
+        <div class="panel-title">Buzilish ehtimoli bashorati</div>
+        <div class="panel" id="predList"><div class="ok-msg">✅ Hozircha buzilish xavfi yo'q</div></div>
+      </div>
+      <div>
+        <div class="panel-title">Sensor trendlari</div>
+        <div class="panel" id="trendList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SI CHAT -->
+  <div id="chat" class="page">
+    <div style="max-width:720px;margin:0 auto">
+      <div class="panel-title">SI Diagnostika Assistent — real vaqtda sensor ma'lumotlari asosida javob beradi</div>
+      <div class="chat-box">
+        <div class="chat-header">
+          <div class="chat-dot"></div>
+          <span class="chat-title">SI DIAGNOSTIKA ASSISTENT</span>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+          <div class="msg assistant">Salom! Men avtomatlashtirish tizimi diagnostika assistentiman. Sensorlar holati, nosozliklar yoki buzilish bashorati haqida savol bering.</div>
+        </div>
+        <div class="chat-input">
+          <input id="chatInput" placeholder="Savol yozing..." onkeydown="if(event.key==='Enter') sendChat()">
+          <button id="sendBtn" onclick="sendChat()">↑</button>
+        </div>
+      </div>
+      <div class="quick-btns">
+        <button class="quick-btn" onclick="askQuick('Qaysi sensor nosoz?')">Qaysi sensor nosoz?</button>
+        <button class="quick-btn" onclick="askQuick('Buzilish xavfi bormi?')">Buzilish xavfi bormi?</button>
+        <button class="quick-btn" onclick="askQuick('Tizim holati qanday?')">Tizim holati qanday?</button>
+        <button class="quick-btn" onclick="askQuick('Qanday chora ko\'rish kerak?')">Qanday chora ko'rish kerak?</button>
+        <button class="quick-btn" onclick="askQuick('Harorat nima uchun yuqori?')">Harorat nima uchun yuqori?</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JURNAL -->
+  <div id="jurnal" class="page">
+    <div class="panel-title">Hodisalar jurnali</div>
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <table class="log-table">
+        <thead><tr><th>Vaqt</th><th>Sana</th><th>Hodisa</th></tr></thead>
+        <tbody id="logBody"><tr><td colspan="3" class="ok-msg">Hech qanday hodisa yo'q</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let faultActive = false;
+let currentData = null;
+const histories = {};
+
+function showTab(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function statusColor(st) {
+  return st==='normal'?'#1db954':st==='warning'?'#f59e0b':'#ef4444';
+}
+function statusLabel(st) {
+  return st==='normal'?'NORMAL':st==='warning'?'OGOHLANTIRISH':'KRITIK';
+}
+
+function updateHeader(status) {
+  const c = statusColor(status);
+  document.getElementById('statusBadge').style.borderColor = c;
+  document.getElementById('statusBadge').style.background = c+'22';
+  document.getElementById('statusDot').style.background = c;
+  document.getElementById('statusDot').style.boxShadow = `0 0 8px ${c}`;
+  document.getElementById('statusText').style.color = c;
+  document.getElementById('statusText').textContent = statusLabel(status);
+}
+
+function drawMini(canvas, data) {
+  if (!data || data.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const vals = data.slice(-24);
+  const min = Math.min(...vals)*0.97, max = Math.max(...vals)*1.03;
+  const pts = vals.map((v,i) => ({x:(i/(vals.length-1))*W, y:H-((v-min)/(max-min+0.001))*H}));
+  ctx.beginPath(); ctx.moveTo(pts[0].x,H);
+  pts.forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.lineTo(pts[pts.length-1].x,H); ctx.closePath();
+  ctx.fillStyle='rgba(59,130,246,0.1)'; ctx.fill();
+  ctx.beginPath(); pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+  ctx.strokeStyle='#3b82f6'; ctx.lineWidth=1.5; ctx.stroke();
+}
+
+function renderDashboard(data) {
+  let normal=0, warning=0, critical=0;
+  const grid = document.getElementById('sensorGrid');
+  grid.innerHTML = data.readings.map((r,i) => {
+    if(r.status==='normal') normal++;
+    else if(r.status==='warning') warning++;
+    else critical++;
+    if(!histories[i]) histories[i]=[];
+    histories[i].push(r.value);
+    if(histories[i].length>40) histories[i].shift();
+    const c = statusColor(r.status);
+    return `<div class="sensor-card ${r.status}">
+      <div class="sensor-top">
+        <div>
+          <div class="sensor-name">${r.name}</div>
+          <div class="sensor-value" style="color:${c}">${r.value.toFixed(1)}<span class="sensor-unit" style="color:${c}aa">${r.unit}</span></div>
+        </div>
+        <div class="sensor-badge ${r.status}" style="border-color:${c};color:${c};background:${c}22">${statusLabel(r.status)}</div>
+      </div>
+      <div class="sensor-trend">📈 Trend: ${r.trend||'—'}</div>
+      <canvas class="mini" id="c${i}" width="300" height="36"></canvas>
+    </div>`;
+  }).join('');
+  document.getElementById('countNormal').textContent = normal;
+  document.getElementById('countWarning').textContent = warning;
+  document.getElementById('countCritical').textContent = critical;
+  data.readings.forEach((_,i) => {
+    const canvas = document.getElementById('c'+i);
+    if(canvas) drawMini(canvas, histories[i]);
+  });
+}
+
+function renderDiagnostics(data) {
+  const list = document.getElementById('diagList');
+  if(data.diagnostics.length===0) {
+    list.innerHTML='<div class="ok-msg">✓ Barcha tizimlar normal ishlayapti</div>';
+  } else {
+    list.innerHTML = data.diagnostics.map(d=>`
+      <div class="diag-item">
+        <div>
+          <div class="diag-name">${d.sensor}</div>
+          <div class="diag-val">${d.value.toFixed(1)} ${d.unit} — og'ish: ${d.deviation}%</div>
+          <div class="diag-rec">💡 ${d.recommendation}</div>
+        </div>
+        <span class="badge ${d.status}">${d.status==='critical'?'KRITIK':'OGOHLANTIRISH'}</span>
+      </div>`).join('');
+  }
+
+  const pb = document.getElementById('progressBars');
+  pb.innerHTML = data.readings.map(r => {
+    const c = statusColor(r.status);
+    const pct = Math.min(100,Math.max(5,((r.value-r.normal_min)/(r.critical_max-r.normal_min))*100));
+    return `<div class="progress-row">
+      <div class="progress-label">
+        <span style="color:#9ca3af">${r.name}</span>
+        <span style="color:${c};font-family:'Courier New',monospace">${r.value.toFixed(1)} ${r.unit}</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${c};box-shadow:0 0 6px ${c}66"></div></div>
+    </div>`;
+  }).join('');
+
+  const alert = document.getElementById('faultAlert');
+  if(data.fault_active) {
+    const sname = data.readings[data.fault_sensor]?.name||'';
+    alert.style.display='block';
+    alert.innerHTML=`⚠ ${sname} sensori nosozlik holatida!<br><span style="color:#6b7280">SI tizim anomaliyani aniqlamoqda...</span>`;
+  } else {
+    alert.style.display='none';
+  }
+}
+
+function renderPredictions(data) {
+  const predList = document.getElementById('predList');
+  if(data.predictions.length===0) {
+    predList.innerHTML='<div class="ok-msg">✅ Hozircha buzilish xavfi aniqlanmadi</div>';
+  } else {
+    predList.innerHTML = data.predictions.map(p => {
+      const c = p.risk>70?'#ef4444':'#f59e0b';
+      return `<div class="pred-card ${p.risk>70?'high':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="pred-sensor">⚠ ${p.sensor}</div>
+          <span style="color:${c};font-size:20px;font-weight:700">${p.risk}%</span>
+        </div>
+        <div class="pred-msg">${p.message}</div>
+        <div class="pred-bar-track"><div class="pred-bar-fill" style="width:${p.risk}%;background:${c}"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  const trendList = document.getElementById('trendList');
+  trendList.innerHTML = data.readings.map(r => {
+    const icon = r.trend&&r.trend.includes('ko\'tarilmoqda')?'📈':r.trend&&r.trend.includes('tushmoqda')?'📉':'➡️';
+    const c = r.trend&&r.trend.includes('ko\'tarilmoqda')?'#f59e0b':r.trend&&r.trend.includes('tushmoqda')?'#3b82f6':'#1db954';
+    return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #0f1f35">
+      <span style="color:#9ca3af;font-size:12px">${icon} ${r.name}</span>
+      <span style="color:${c};font-size:11px">${r.trend||'barqaror'}</span>
+    </div>`;
+  }).join('');
+}
+
+async function fetchData() {
+  try {
+    const res = await fetch('/api/sensors');
+    const data = await res.json();
+    currentData = data;
+    updateHeader(data.system_status);
+    renderDashboard(data);
+    renderDiagnostics(data);
+    renderPredictions(data);
+  } catch(e) { console.error(e); }
+}
+
+async function fetchLog() {
+  try {
+    const res = await fetch('/api/log');
+    const log = await res.json();
+    const tbody = document.getElementById('logBody');
+    if(log.length===0) {
+      tbody.innerHTML='<tr><td colspan="3" class="ok-msg">Hech qanday hodisa qayd etilmagan</td></tr>';
+    } else {
+      tbody.innerHTML = log.map((l,i)=>`
+        <tr><td class="log-time">${l.time}</td><td class="log-time">${l.date}</td><td class="log-issue">⚠ ${l.issues.join(' | ')}</td></tr>`).join('');
+    }
+  } catch(e) {}
+}
+
+async function toggleFault() {
+  faultActive = !faultActive;
+  const sensor = parseInt(document.getElementById('faultSelect').value);
+  const btn = document.getElementById('faultBtn');
+  btn.textContent = faultActive?"🔴 NOSOZLIKNI O'CHIR":"⚡ NOSOZLIK YOQISH";
+  btn.className = faultActive?'ctrl active':'ctrl';
+  await fetch('/api/fault',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:faultActive,sensor})});
+}
+
+function addMessage(role, text) {
+  const msgs = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function askQuick(q) {
+  document.getElementById('chatInput').value = q;
+  sendChat();
+}
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const btn = document.getElementById('sendBtn');
+  const text = input.value.trim();
+  if(!text || btn.disabled) return;
+  input.value = '';
+  btn.disabled = true;
+  addMessage('user', text);
+
+  // Typing indicator
+  const msgs = document.getElementById('chatMessages');
+  const typing = document.createElement('div');
+  typing.className = 'typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  msgs.appendChild(typing);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    const res = await fetch('/api/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        message: text,
+        readings: currentData?.readings||[],
+        diagnostics: currentData?.diagnostics||[],
+        predictions: currentData?.predictions||[]
+      })
+    });
+    const data = await res.json();
+    typing.remove();
+    addMessage('assistant', data.reply);
+  } catch(e) {
+    typing.remove();
+    addMessage('assistant', 'Xatolik yuz berdi. API kalitni tekshiring.');
+  }
+  btn.disabled = false;
+  input.focus();
+}
+
+fetchData();
+setInterval(fetchData, 1500);
+setInterval(fetchLog, 3000);
+</script>
+</body>
+</html>
